@@ -31,25 +31,27 @@ def save_records(client, feed, records):
     records = list({item["id"]: item for item in records}.values())
     existing = client.table("tenderdesk_notices").select("id,fingerprint").in_("id", [item["id"] for item in records]).execute().data
     previous = {item["id"]: item for item in existing}
-    rows, events, added, changed = [], [], 0, 0
+    new_rows, changed_rows, unchanged_rows, events, added, changed = [], [], [], [], 0, 0
     for record in records:
         digest = fingerprint(record)
         old = previous.get(record["id"])
-        row = {**record, "last_seen": at, "fingerprint": digest}
         if not old:
-            row.update(first_seen=at, updated_at=at)
+            new_rows.append({**record, "last_seen": at, "fingerprint": digest, "first_seen": at, "updated_at": at})
             added += 1
             events.append({"notice_id": record["id"], "event_type": "new", "at": at, "payload": record})
         elif old["fingerprint"] != digest:
-            row["updated_at"] = at
+            changed_rows.append({**record, "last_seen": at, "fingerprint": digest, "updated_at": at})
             changed += 1
             events.append({"notice_id": record["id"], "event_type": "updated", "at": at, "payload": record})
         else:
-            # Upsert preserves the original first_seen / updated_at columns because
-            # they are not present in this unchanged record.
-            row.pop("fingerprint")
-        rows.append(row)
-    client.table("tenderdesk_notices").upsert(rows, on_conflict="id").execute()
+            unchanged_rows.append(record)
+    if new_rows:
+        client.table("tenderdesk_notices").insert(new_rows).execute()
+    for record in changed_rows:
+        notice_id = record.pop("id")
+        client.table("tenderdesk_notices").update(record).eq("id", notice_id).execute()
+    for record in unchanged_rows:
+        client.table("tenderdesk_notices").update({"last_seen": at, "url": record["url"]}).eq("id", record["id"]).execute()
     if events:
         client.table("tenderdesk_events").insert(events).execute()
     return len(records), added, changed

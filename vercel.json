@@ -1,7 +1,8 @@
 {
+  "framework": null,
   "rewrites": [{ "source": "/(.*)", "destination": "/api/index" }],
   "functions": {
-    "api/index.py": { "maxDuration": 60, "includeFiles": "{web/**,app.py,auth.py,api/**}" }
+    "api/index.py": { "maxDuration": 300, "includeFiles": "{web/**,app.py,auth.py,api/**}" }
   },
   "crons": [
     { "path": "/api/collect", "schedule": "*/15 * * * *" }

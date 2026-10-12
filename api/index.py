@@ -82,8 +82,17 @@ def bookmarked_ids(user_id):
     return {row["notice_id"] for row in database().table("tenderdesk_bookmarks").select("notice_id").eq("user_id", user_id).execute().data}
 
 
+def fetch_all(table, columns="*"):
+    client, rows, page_size = database(), [], 1000
+    while True:
+        batch = client.table(table).select(columns).range(len(rows), len(rows) + page_size - 1).execute().data
+        rows.extend(batch)
+        if len(batch) < page_size:
+            return rows
+
+
 def notices_for(profile, params):
-    rows = database().table("tenderdesk_notices").select("*").execute().data
+    rows = fetch_all("tenderdesk_notices")
     now = iso_now()
     query, source, kind, status = (params.get("q", "").strip().lower(), params.get("source", ""), params.get("kind", ""), params.get("status", ""))
     saved = bookmarked_ids(profile["id"])
@@ -165,7 +174,7 @@ def notice_detail(user, notice_id):
 @require_user
 def dashboard(user):
     profile = profile_for(user)
-    rows = database().table("tenderdesk_notices").select("id,kind,deadline").execute().data
+    rows = fetch_all("tenderdesk_notices", "id,feed,kind,deadline")
     now, week = iso_now(), (datetime.now(timezone.utc) + timedelta(days=7)).isoformat()
     sources = database().table("tenderdesk_sources").select("*").execute().data
     source_counts = {}
@@ -179,7 +188,7 @@ def dashboard(user):
         event.update(title=notice.get("title"), feed=notice.get("feed"), reference=notice.get("reference"))
     runs = database().table("tenderdesk_runs").select("*").order("id", desc=True).limit(20).execute().data
     activity = {}
-    for event in database().table("tenderdesk_events").select("at").execute().data:
+    for event in fetch_all("tenderdesk_events", "at"):
         day = event["at"][:10]
         activity[day] = activity.get(day, 0) + 1
     return jsonify(stats={"total": len(rows), "open": sum(row["kind"] != "corrigendum" and (row.get("deadline") or "") > now for row in rows), "closing": sum(row["kind"] != "corrigendum" and now < (row.get("deadline") or "") <= week for row in rows), "corrigenda": sum(row["kind"] == "corrigendum" for row in rows), "saved": len(bookmarked_ids(profile["id"]))}, sources=sources, events=events, activity=[{"day": day, "count": count} for day, count in sorted(activity.items())[-7:]], runs=runs, sync={"running": False, "current": [], "last_finished": runs[0]["finished"] if runs else None, "next_run": None}, settings={row["key"]: row["value"] for row in database().table("tenderdesk_settings").select("key,value").execute().data}, server_time=now)
