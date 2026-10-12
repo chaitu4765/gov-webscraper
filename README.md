@@ -54,9 +54,20 @@ GePNIC records use source + reference + notice type (and corrigendum title) for 
 
 Dates display in IST. GeM's public listing JavaScript displays the literal UTC-looking clock fields with UTC formatting, so the collector interprets that displayed clock as IST. Always verify final deadlines on the official page. Public GePNIC homepage notice links omit the collector-only `session` parameter so the official portal can initialize a fresh browser session. Stored notice and revision links are repaired on startup. Document-download links and other session-bound forms are not rewritten.
 
-## Deployment boundary
+## Vercel + Supabase deployment
 
-The server binds to 127.0.0.1. It is a private single-user workspace, without public authentication or tenant isolation. For a shared always-on deployment, add authentication, a production server/reverse proxy, durable backups, monitoring and run the collector as an independent supervised service on a host with tested portal access. No cloud deployment or paid service was created.
+The repository now includes a Vercel Python Function (`api/index.py`) and `vercel.json`. It serves the existing frontend, verifies Supabase Auth access tokens, stores TenderDesk data in the isolated `tenderdesk_*` PostgreSQL tables, stores PDFs in the private `tenderdesk-documents` bucket, and invokes the stateless collector every 15 minutes with Vercel Cron.
+
+Before deployment, create the following Vercel environment variables for Production, Preview and Development. Copy the first two from Supabase **Connect**; generate a random `CRON_SECRET`. Keep the secret key server-only and never commit a `.env` file.
+
+```text
+SUPABASE_URL=https://your-project-ref.supabase.co
+SUPABASE_PUBLISHABLE_KEY=sb_publishable_...
+SUPABASE_SECRET_KEY=sb_secret_...
+CRON_SECRET=<long-random-value>
+```
+
+The schema migration has been applied to the connected Supabase project. After committing and pushing these files, import the repository in Vercel (or redeploy its connected project). Create a Supabase Auth user through the app's **Create account** button, configure its Auth URL settings to include the Vercel URL, then sign in and wait for the first Cron run.
 
 ## Tests
 

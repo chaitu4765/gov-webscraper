@@ -23,7 +23,6 @@ from html import unescape
 
 ROOT = Path(__file__).resolve().parent
 DATA = Path(os.environ.get('TENDER_DATA_DIR', str(ROOT / 'data')))
-DATA.mkdir(parents=True, exist_ok=True)
 DB = DATA / 'tenders.sqlite3'
 IST = timezone(timedelta(hours=5, minutes=30))
 PORT = int(os.environ.get('PORT', '8765'))
@@ -60,6 +59,7 @@ def connect():
     return conn
 
 def init_db():
+    DATA.mkdir(parents=True, exist_ok=True)
     with connect() as c:
         c.execute('PRAGMA journal_mode=WAL')
         c.executescript('''
